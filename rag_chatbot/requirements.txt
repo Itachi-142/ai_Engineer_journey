@@ -1,6 +1,7 @@
 langchain
 langchain-groq
 langchain-community
+langchain-huggingface
 langchain-chroma
 langchain-text-splitters
 chromadb
