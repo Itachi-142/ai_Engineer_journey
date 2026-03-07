@@ -5,7 +5,7 @@ from langchain_core.messages import HumanMessage, AIMessage
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from langchain_chroma import Chroma
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 import os
 
 class RAGChatbot:
@@ -29,10 +29,14 @@ class RAGChatbot:
             length_function=len
         )
 
-    def load_document(self, text):
-        """Load and index a document"""
-        doc = Document(page_content=text)
+    def load_document(self, text, source="uploaded_document"):
+        """Load and index a document with metadata"""
+        doc = Document(page_content=text, metadata={"source": source})
         chunks = self.splitter.split_documents([doc])
+
+        for i, chunk in enumerate(chunks):
+            chunk.metadata["chunk_id"] = i
+            chunk.metadata["total_chunks"] = len(chunks)
 
         self.vectorstore = Chroma.from_documents(
             documents=chunks,
@@ -43,19 +47,29 @@ class RAGChatbot:
         return len(chunks)
 
     def retrieve(self, query, k=3, score_threshold=1.0):
-        """Retrieve relevant chunks only if similarity score is below threshold"""
+        """Retrieve and re-rank relevant chunks"""
         if self.vectorstore is None:
             return []
 
-        results = self.vectorstore.similarity_search_with_score(query, k=k)
-        
-        for doc, score in results:
-            print(f"Score: {score:.4f} | Chunk: {doc.page_content[:60]}...")
+        # Get more candidates than needed, then re-rank
+        results = self.vectorstore.similarity_search_with_score(query, k=k*2)
 
-        # L2 distance — lower score = more similar. Filter irrelevant chunks.
-        relevant = [doc for doc, score in results if score < score_threshold]
+        # Filter by threshold
+        filtered = [(doc, score) for doc, score in results if score < score_threshold]
 
-        return relevant
+        # Re-rank — sort by score ascending (lower L2 = more similar)
+        reranked = sorted(filtered, key=lambda x: x[1])
+
+        # Deduplicate by chunk_id
+        seen = set()
+        unique = []
+        for doc in [doc for doc, score in reranked[:k]]:
+            cid = doc.metadata.get("chunk_id")
+            if cid not in seen:
+                seen.add(cid)
+                unique.append(doc)
+
+        return unique
 
     def chat(self, user_message):
         """Generate a response using RAG"""
@@ -63,19 +77,21 @@ class RAGChatbot:
         context = "\n\n".join([doc.page_content for doc in relevant_docs])
 
         if context:
-            system_prompt = """You are a helpful assistant that answers 
-            questions based on the provided document context.
-            Use ONLY the context to answer. If the answer is not in 
-            the context, say 'I don't have that information in the document.'
-            Be concise and accurate.
-            
+            system_prompt = """You are a strict document-based assistant.
+            Answer ONLY using the exact information present in the document context below.
+            If the specific information requested is not explicitly stated in the context,
+            respond with exactly: 'I don't have that information in the document.'
+            Do NOT infer, expand, or add any information beyond what is in the context.
+            Do NOT use your own knowledge under any circumstances.
+
             Document Context:
             {context}"""
         else:
-            system_prompt = """You are a helpful assistant.
-            Answer based ONLY on the document provided.
-            You do not have enough context to answer this question.
-            Say: 'I don't have that information in the document.'"""
+            system_prompt = """You are a strict document-based assistant.
+            The retrieved context does not contain relevant information for this query.
+            You MUST respond with exactly: 'I don't have that information in the document.'
+            Do NOT add any additional information, explanations, or knowledge.
+            Do NOT say 'however'. Do NOT answer from your own knowledge."""
 
         prompt = ChatPromptTemplate.from_messages([
             ("system", system_prompt),

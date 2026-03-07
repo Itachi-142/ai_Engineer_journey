@@ -116,7 +116,12 @@ if prompt := st.chat_input("Ask a question about your document..."):
         if sources:
             with st.expander("📚 Sources"):
                 for i, doc in enumerate(sources, 1):
-                    st.caption(f"Chunk {i}: {doc.page_content[:150]}...")
+                    st.caption(
+                        f"Chunk {doc.metadata.get('chunk_id', i)} "
+                        f"of {doc.metadata.get('total_chunks', '?')} | "
+                        f"Source: {doc.metadata.get('source', 'unknown')}"
+                    )
+                    st.caption(f"Content: {doc.page_content[:150]}...")
 
     # Add assistant message
     st.session_state.messages.append({
