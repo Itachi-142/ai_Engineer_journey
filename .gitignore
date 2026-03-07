@@ -1,0 +1,18 @@
+code .gitignore
+```
+
+Paste this inside and save:
+```
+# API Keys — never commit
+.env
+
+# ChromaDB local databases
+chroma_db/
+chroma_kb/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
