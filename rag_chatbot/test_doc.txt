@@ -4,6 +4,5 @@ Each element is identified by an index. Arrays allow random access.
 A linked list is a sequence of nodes where each node contains data
 and a connection to the next node in the sequence.
 
-Binary search worcd C:\Users\varun\OneDrive\Desktop\ai_Engineer_journey\rag_chatbot
-python evaluate.pyks on sorted arrays by repeatedly dividing
+Binary search works on sorted arrays by repeatedly dividing
 the search space in half until the target is found.

@@ -22,7 +22,7 @@ class RAGChatbot:
 
         self.chat_history = []
         self.vectorstore = None
-        self.loaded_sources = set()  # track loaded filenames
+        self.loaded_sources = set()
 
         self.splitter = RecursiveCharacterTextSplitter(
             chunk_size=300,
@@ -32,8 +32,6 @@ class RAGChatbot:
 
     def load_document(self, text, source="uploaded_document"):
         """Load and index a document — supports multiple documents"""
-
-        # Prevent duplicate loading
         if source in self.loaded_sources:
             return 0
 
@@ -44,7 +42,6 @@ class RAGChatbot:
             chunk.metadata["chunk_id"] = i
             chunk.metadata["total_chunks"] = len(chunks)
 
-        # If vectorstore exists, ADD to it. If not, CREATE it.
         if self.vectorstore is None:
             self.vectorstore = Chroma.from_documents(
                 documents=chunks,
@@ -57,7 +54,7 @@ class RAGChatbot:
         self.loaded_sources.add(source)
         return len(chunks)
 
-    def retrieve(self, query, k=3, score_threshold=1.0):
+    def retrieve(self, query, k=3, score_threshold=1.2):
         """Retrieve and re-rank relevant chunks"""
         if self.vectorstore is None:
             return []
@@ -68,7 +65,6 @@ class RAGChatbot:
 
         reranked = sorted(filtered, key=lambda x: x[1])
 
-        # Deduplicate by chunk_id and source combined
         seen = set()
         unique = []
         for doc in [doc for doc, score in reranked[:k]]:
