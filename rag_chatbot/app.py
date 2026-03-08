@@ -3,11 +3,9 @@ from rag_engine import RAGChatbot
 from dotenv import load_dotenv
 import os
 
-# Load environment
 load_dotenv()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY").strip()
 
-# Page config
 st.set_page_config(
     page_title="RAG Chatbot",
     page_icon="🤖",
@@ -17,13 +15,14 @@ st.set_page_config(
 st.title("🤖 RAG Chatbot")
 st.caption("Upload a document and ask questions about it")
 
-# Initialize chatbot in session state
+# Initialize session state
 if "chatbot" not in st.session_state:
     st.session_state.chatbot = RAGChatbot(api_key=GROQ_API_KEY)
     st.session_state.messages = []
     st.session_state.doc_loaded = False
+    st.session_state.loaded_docs = []
 
-# Sidebar — document input
+# Sidebar
 with st.sidebar:
     st.header("📄 Document")
 
@@ -42,9 +41,11 @@ with st.sidebar:
             if doc_text.strip():
                 with st.spinner("Processing document..."):
                     num_chunks = st.session_state.chatbot.load_document(
-                        doc_text
+                        doc_text,
+                        source="pasted_text"
                     )
                 st.session_state.doc_loaded = True
+                st.session_state.loaded_docs.append("pasted_text")
                 st.success(f"✅ Document loaded — {num_chunks} chunks created")
             else:
                 st.error("Please paste some text first")
@@ -74,15 +75,27 @@ with st.sidebar:
                     else:
                         text = uploaded.read().decode("utf-8")
 
-                    num_chunks = st.session_state.chatbot.load_document(text)
+                    num_chunks = st.session_state.chatbot.load_document(
+                        text,
+                        source=uploaded.name
+                    )
                 st.session_state.doc_loaded = True
+                st.session_state.loaded_docs.append(uploaded.name)
                 st.success(f"✅ Document loaded — {num_chunks} chunks created")
+
+    # Show loaded documents
+    if st.session_state.loaded_docs:
+        st.markdown("**Loaded documents:**")
+        for doc_name in st.session_state.loaded_docs:
+            st.caption(f"📄 {doc_name}")
+
     st.divider()
 
     if st.button("🔄 Reset Chat"):
         st.session_state.chatbot.reset()
         st.session_state.messages = []
         st.session_state.doc_loaded = False
+        st.session_state.loaded_docs = []
         st.rerun()
 
     if st.session_state.doc_loaded:
@@ -91,28 +104,20 @@ with st.sidebar:
         st.warning("⚠️ No document loaded")
 
 # Main chat area
-# Display chat history
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.write(message["content"])
 
-# Chat input
 if prompt := st.chat_input("Ask a question about your document..."):
-    # Add user message
-    st.session_state.messages.append({
-        "role": "user",
-        "content": prompt
-    })
+    st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.write(prompt)
 
-    # Generate response
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             response, sources = st.session_state.chatbot.chat(prompt)
         st.write(response)
 
-        # Show sources
         if sources:
             with st.expander("📚 Sources"):
                 for i, doc in enumerate(sources, 1):
@@ -123,8 +128,4 @@ if prompt := st.chat_input("Ask a question about your document..."):
                     )
                     st.caption(f"Content: {doc.page_content[:150]}...")
 
-    # Add assistant message
-    st.session_state.messages.append({
-        "role": "assistant",
-        "content": response
-    })
+    st.session_state.messages.append({"role": "assistant", "content": response})
