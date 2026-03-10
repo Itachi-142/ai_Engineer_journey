@@ -8,9 +8,30 @@ load_dotenv()
 from tutor_engine import explain_concept, socratic_chat
 from quiz_generator import generate_quiz
 from evaluator import evaluate_answer
+from memory import save_topic, load_memory, get_weak_topics
 
 st.set_page_config(page_title="AI Learning Tutor", page_icon="🎓")
 st.title("🎓 AI Learning Tutor")
+
+# --- SIDEBAR: Study History ---
+with st.sidebar:
+    st.header("📚 Study History")
+    memory = load_memory()
+
+    if not memory:
+        st.caption("No topics studied yet.")
+    else:
+        for topic, attempts in memory.items():
+            latest = attempts[-1]
+            st.markdown(f"**{topic}**")
+            st.caption(f"Last score: {latest['score']:.1f}/5.0 — {latest['date']}")
+
+        st.divider()
+        weak = get_weak_topics()
+        if weak:
+            st.subheader("⚠️ Needs Review")
+            for topic, score in weak:
+                st.markdown(f"- {topic} ({score:.1f}/5.0)")
 
 mode = st.radio("Choose mode:", ["Concept Explanation", "Socratic Tutor", "Quiz Me"])
 
@@ -20,7 +41,7 @@ st.divider()
 if mode == "Concept Explanation":
     st.subheader("📘 Concept Explanation")
     topic = st.text_input("Enter a concept to explain:", placeholder="e.g. gradient descent, binary search, transformers")
-    
+
     if st.button("Explain"):
         if topic.strip():
             with st.spinner("Thinking..."):
@@ -79,6 +100,7 @@ elif mode == "Quiz Me":
                 st.session_state.current_question = 0
                 st.session_state.user_answers = {}
                 st.session_state.quiz_finished = False
+                st.session_state.quiz_topic = topic_input
         else:
             st.warning("Enter a topic first.")
 
@@ -120,9 +142,10 @@ elif mode == "Quiz Me":
                 st.write(f"**Explanation:** {q['explanation']}")
 
         avg = total_score / len(questions)
+        save_topic(st.session_state.quiz_topic, avg, len(questions))
         st.metric("Final Score", f"{avg:.1f} / 5.0")
 
         if st.button("🔄 Start New Quiz"):
-            for key in ["quiz_questions", "current_question", "user_answers", "quiz_finished"]:
+            for key in ["quiz_questions", "current_question", "user_answers", "quiz_finished", "quiz_topic"]:
                 del st.session_state[key]
             st.rerun()
