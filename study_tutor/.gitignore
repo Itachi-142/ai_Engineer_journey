@@ -1,0 +1,4 @@
+.env
+topic_memory.json
+__pycache__/
+*.pyc
