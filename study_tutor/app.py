@@ -6,11 +6,13 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 load_dotenv()
 
 from tutor_engine import explain_concept, socratic_chat
+from quiz_generator import generate_quiz
+from evaluator import evaluate_answer
 
 st.set_page_config(page_title="AI Learning Tutor", page_icon="🎓")
 st.title("🎓 AI Learning Tutor")
 
-mode = st.radio("Choose mode:", ["Concept Explanation", "Socratic Tutor"])
+mode = st.radio("Choose mode:", ["Concept Explanation", "Socratic Tutor", "Quiz Me"])
 
 st.divider()
 
@@ -38,7 +40,6 @@ elif mode == "Socratic Tutor":
     if "display_history" not in st.session_state:
         st.session_state.display_history = []
 
-    # display chat
     for msg in st.session_state.display_history:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
@@ -64,3 +65,64 @@ elif mode == "Socratic Tutor":
         st.session_state.chat_history = []
         st.session_state.display_history = []
         st.rerun()
+
+# --- QUIZ ME MODE ---
+elif mode == "Quiz Me":
+    st.subheader("📝 Quiz Me")
+
+    topic_input = st.text_input("Enter a topic to be quizzed on:", placeholder="e.g. binary search, neural networks")
+
+    if st.button("Generate Quiz"):
+        if topic_input.strip():
+            with st.spinner("Generating quiz..."):
+                st.session_state.quiz_questions = generate_quiz(topic_input)
+                st.session_state.current_question = 0
+                st.session_state.user_answers = {}
+                st.session_state.quiz_finished = False
+        else:
+            st.warning("Enter a topic first.")
+
+    if "quiz_questions" in st.session_state and not st.session_state.get("quiz_finished", False):
+        questions = st.session_state.quiz_questions
+        idx = st.session_state.current_question
+
+        if idx < len(questions):
+            q = questions[idx]
+            st.markdown(f"**Question {idx+1} of {len(questions)}**")
+            st.markdown(f"**{q['question']}**")
+
+            selected = st.radio("Choose your answer:", q["options"], key=f"q_{idx}")
+
+            if st.button("Submit Answer"):
+                st.session_state.user_answers[idx] = selected
+                if idx + 1 < len(questions):
+                    st.session_state.current_question += 1
+                    st.rerun()
+                else:
+                    st.session_state.quiz_finished = True
+                    st.rerun()
+
+    if st.session_state.get("quiz_finished", False):
+        st.subheader("📊 Results")
+        questions = st.session_state.quiz_questions
+        total_score = 0
+
+        for i, q in enumerate(questions):
+            user_ans = st.session_state.user_answers.get(i, "No answer")
+            result = evaluate_answer(q["question"], q["correct_answer"], user_ans)
+            total_score += result["score"]
+
+            with st.expander(f"Q{i+1}: {q['question']}"):
+                st.write(f"**Your answer:** {user_ans}")
+                st.write(f"**Correct answer:** {q['correct_answer']}")
+                st.write(f"**Score:** {result['score']}/5")
+                st.write(f"**Feedback:** {result['feedback']}")
+                st.write(f"**Explanation:** {q['explanation']}")
+
+        avg = total_score / len(questions)
+        st.metric("Final Score", f"{avg:.1f} / 5.0")
+
+        if st.button("🔄 Start New Quiz"):
+            for key in ["quiz_questions", "current_question", "user_answers", "quiz_finished"]:
+                del st.session_state[key]
+            st.rerun()
